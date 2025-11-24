@@ -26,13 +26,7 @@ FEATURE_TRANSLATION = {
     'IMC': 'BMI',
     'ATIVIDADE (mCi) Repouso': 'Rest Activity (mCi)',
     'ATIVIDADE (mCi) Esforço': 'Stress Activity (mCi)',
-    'DELTA Repouso': 'Rest Delta',
-    'DELTA Esforço': 'Stress Delta',
-    'TEMPO TOTAL ATIVIDADE': 'Total Activity Time',
-    'TEMPO PERMANENCIA': 'Stay Duration',
     'Nº REPETIÇÃO\nTOTAL': 'Total Repetitions',
-    'ID PACIENTE': 'Patient ID',
-    'Unnamed: 0': 'Index',
     'SEXO_M': 'Gender_Male',
     'ETAPA_1': 'Stage_1',
     'ETAPA_2': 'Stage_2',
@@ -47,20 +41,45 @@ def translate_feature_names(feature_series_or_list):
         # It's a pandas Series
         translated_index = []
         for name in feature_series_or_list.index:
+            # Skip ID-related features and timing variables
+            excluded_features = ['ID PACIENTE', 'Unnamed: 0', 'Patient ID', 'Index',
+                               'DELTA Repouso', 'DELTA Esforço', 'TEMPO TOTAL ATIVIDADE', 
+                               'TEMPO PERMANENCIA', 'Rest Delta', 'Stress Delta', 
+                               'Total Activity Time', 'Stay Duration']
+            if name in excluded_features:
+                continue
             # Check for exact match first
-            if name in FEATURE_TRANSLATION:
+            elif name in FEATURE_TRANSLATION:
                 translated_index.append(FEATURE_TRANSLATION[name])
             # Check for caffeine variations
             elif 'CAFEÍNA' in name:
                 translated_index.append(name.replace('CAFEÍNA', 'Caffeine'))
             else:
                 translated_index.append(name)
-        return pd.Series(feature_series_or_list.values, index=translated_index)
+        # Filter out excluded values too
+        filtered_values = []
+        original_index = []
+        for i, name in enumerate(feature_series_or_list.index):
+            excluded_features = ['ID PACIENTE', 'Unnamed: 0', 'Patient ID', 'Index',
+                               'DELTA Repouso', 'DELTA Esforço', 'TEMPO TOTAL ATIVIDADE', 
+                               'TEMPO PERMANENCIA', 'Rest Delta', 'Stress Delta', 
+                               'Total Activity Time', 'Stay Duration']
+            if name not in excluded_features:
+                filtered_values.append(feature_series_or_list.values[i])
+                original_index.append(name)
+        
+        return pd.Series(filtered_values, index=translated_index)
     else:
         # It's a list
         translated_list = []
         for name in feature_series_or_list:
-            if name in FEATURE_TRANSLATION:
+            excluded_features = ['ID PACIENTE', 'Unnamed: 0', 'Patient ID', 'Index',
+                               'DELTA Repouso', 'DELTA Esforço', 'TEMPO TOTAL ATIVIDADE', 
+                               'TEMPO PERMANENCIA', 'Rest Delta', 'Stress Delta', 
+                               'Total Activity Time', 'Stay Duration']
+            if name in excluded_features:
+                continue
+            elif name in FEATURE_TRANSLATION:
                 translated_list.append(FEATURE_TRANSLATION[name])
             elif 'CAFEÍNA' in name:
                 translated_list.append(name.replace('CAFEÍNA', 'Caffeine'))
@@ -167,8 +186,12 @@ else:
 
 # Processar colunas numéricas
 if numeric_cols:
-    df_numeric = df_work[numeric_cols].fillna(df_work[numeric_cols].median())
-    print(f"Variáveis numéricas processadas: {df_numeric.shape[1]}")
+    # Remove patient ID, index columns and specific timing variables as requested
+    excluded_cols = ['ID PACIENTE', 'Unnamed: 0', 'DELTA Repouso', 'DELTA Esforço', 
+                    'TEMPO TOTAL ATIVIDADE', 'TEMPO PERMANENCIA']
+    clinical_numeric_cols = [col for col in numeric_cols if col not in excluded_cols]
+    df_numeric = df_work[clinical_numeric_cols].fillna(df_work[clinical_numeric_cols].median())
+    print(f"Variáveis numéricas processadas: {df_numeric.shape[1]} (excluindo IDs e variáveis de tempo)")
 else:
     df_numeric = pd.DataFrame()
 
@@ -454,11 +477,15 @@ if hasattr(model, 'feature_importances_'):
         print(f"  {i}. {feature}: {importance:.3f}")
         
 print(f"\n📊 ENGLISH FEATURE NAMES MAPPING:")
-used_features = X.columns.tolist()[:10]  # Show first 10 features
+excluded_features = ['ID PACIENTE', 'Unnamed: 0', 'DELTA Repouso', 'DELTA Esforço', 
+                    'TEMPO TOTAL ATIVIDADE', 'TEMPO PERMANENCIA']
+used_features = [col for col in X.columns.tolist()[:10] if col not in excluded_features]  # Show first 10 clinical features
 print("  Original → English:")
 for feature in used_features:
     translated = FEATURE_TRANSLATION.get(feature, feature)
     if translated != feature:
         print(f"  • {feature} → {translated}")
+    elif 'CAFEÍNA' in feature:
+        print(f"  • {feature} → {feature.replace('CAFEÍNA', 'Caffeine')}")
     else:
         print(f"  • {feature} (unchanged)")
